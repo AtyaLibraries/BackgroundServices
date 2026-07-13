@@ -1,0 +1,70 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.6.11709.129
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BackgroundServices", "src\BackgroundServices\BackgroundServices.csproj", "{FE7EA414-E5F5-4D19-827E-86B573001F01}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BackgroundServices.UnitTests", "tests\BackgroundServices.UnitTests\BackgroundServices.UnitTests.csproj", "{3E7209BF-8391-40B7-979D-C20FCECC5D53}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Folder", "Solution Folder", "{4F61F403-4674-487B-ABF4-EE50B96981C1}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		.gitattributes = .gitattributes
+		.gitignore = .gitignore
+		.github\workflows\ci.yml = .github\workflows\ci.yml
+		.github\workflows\dependency-review.yml = .github\workflows\dependency-review.yml
+		.github\workflows\publish-nuget.yml = .github\workflows\publish-nuget.yml
+		Directory.Packages.props = Directory.Packages.props
+		global.json = global.json
+		LICENSE = LICENSE
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{DC4337D4-7797-44F7-AD1F-4A640A4E49D9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{D196C703-6673-4DC9-84E9-BB492024AAD2}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{2C5AB38F-8197-4B93-AC0A-2182F5FAC5D3}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BackgroundServices.Samples.Console", "samples\BackgroundServices.Samples.Console\BackgroundServices.Samples.Console.csproj", "{F579A528-DEAD-442D-9678-E7E5D0283D22}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "benchmarks", "benchmarks", "{4F208057-661E-4B8F-AD0C-9F56F92C6B00}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BackgroundServices.Benchmarks", "benchmarks\BackgroundServices.Benchmarks\BackgroundServices.Benchmarks.csproj", "{067689B6-9A44-422B-BC9B-F4382B9F72A5}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FE7EA414-E5F5-4D19-827E-86B573001F01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FE7EA414-E5F5-4D19-827E-86B573001F01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FE7EA414-E5F5-4D19-827E-86B573001F01}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FE7EA414-E5F5-4D19-827E-86B573001F01}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3E7209BF-8391-40B7-979D-C20FCECC5D53}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3E7209BF-8391-40B7-979D-C20FCECC5D53}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3E7209BF-8391-40B7-979D-C20FCECC5D53}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3E7209BF-8391-40B7-979D-C20FCECC5D53}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F579A528-DEAD-442D-9678-E7E5D0283D22}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F579A528-DEAD-442D-9678-E7E5D0283D22}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F579A528-DEAD-442D-9678-E7E5D0283D22}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F579A528-DEAD-442D-9678-E7E5D0283D22}.Release|Any CPU.Build.0 = Release|Any CPU
+		{067689B6-9A44-422B-BC9B-F4382B9F72A5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{067689B6-9A44-422B-BC9B-F4382B9F72A5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{067689B6-9A44-422B-BC9B-F4382B9F72A5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{067689B6-9A44-422B-BC9B-F4382B9F72A5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{FE7EA414-E5F5-4D19-827E-86B573001F01} = {DC4337D4-7797-44F7-AD1F-4A640A4E49D9}
+		{3E7209BF-8391-40B7-979D-C20FCECC5D53} = {D196C703-6673-4DC9-84E9-BB492024AAD2}
+		{F579A528-DEAD-442D-9678-E7E5D0283D22} = {2C5AB38F-8197-4B93-AC0A-2182F5FAC5D3}
+		{067689B6-9A44-422B-BC9B-F4382B9F72A5} = {4F208057-661E-4B8F-AD0C-9F56F92C6B00}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {AAA6EA4D-621E-430A-B140-CF8F086820E4}
+	EndGlobalSection
+EndGlobal

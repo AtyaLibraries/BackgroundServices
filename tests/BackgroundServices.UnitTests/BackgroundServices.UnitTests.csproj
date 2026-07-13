@@ -1,0 +1,13 @@
+<Project Sdk="Atya.Build.Sdk">
+
+  <!-- Framework, analyzers, and default test packages are provided by Atya.Build.Sdk. -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BackgroundServices\BackgroundServices.csproj" />
+  </ItemGroup>
+
+</Project>
