@@ -21,3 +21,4 @@ jobs:
       fail-on-coverage: true
       coverage-line-min: 90
       coverage-branch-min: 80
+# CI registered on new repo
