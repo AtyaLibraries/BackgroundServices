@@ -14,16 +14,17 @@
 
 ## Overview
 
-`Atya.Hosting.BackgroundServices` provides a narrow `BackgroundService` base class for repeatable worker loops. It keeps cancellation, retry delays, consecutive-failure limits, and lifecycle logging consistent without introducing a worker framework or scheduler.
+`Atya.Hosting.BackgroundServices` provides narrow `BackgroundService` base classes for repeatable worker loops. It keeps cancellation, retry delays, consecutive-failure limits, per-iteration dependency injection scopes, and lifecycle logging consistent without introducing a worker framework or scheduler.
 
 Use it when a service already owns the actual work and only needs boring hosting plumbing around each iteration.
 
 ## Features
 
 - Periodic execution base class built on `Microsoft.Extensions.Hosting.BackgroundService`.
+- Scoped periodic execution base class that creates and disposes a fresh DI scope per iteration.
 - Configurable success interval, failure delay, and maximum consecutive failures.
 - Structured lifecycle and failure logging through `Atya.Diagnostics.Logging`.
-- DI helper for registering hosted services with package-owned options.
+- DI helpers for registering periodic and scoped periodic hosted services with package-owned options.
 
 ## Installation
 
@@ -68,6 +69,26 @@ internal sealed class InboxWorker(ILogger<InboxWorker> logger)
 ### Repeat Work Until The Host Stops
 
 Derive from `PeriodicBackgroundService` and implement one unit of work in `ExecuteIterationAsync`. The base class calls it repeatedly until the host cancellation token is canceled.
+
+### Resolve Scoped Services Per Iteration
+
+Derive from `ScopedPeriodicBackgroundService` when the worker needs scoped services such as DbContexts, unit-of-work objects, or per-iteration clients.
+
+```csharp
+internal sealed class ScopedInboxWorker(
+    ILogger<ScopedInboxWorker> logger,
+    IServiceScopeFactory scopeFactory)
+    : ScopedPeriodicBackgroundService(logger, scopeFactory)
+{
+    protected override Task ExecuteIterationAsync(IServiceProvider scopedServices, CancellationToken cancellationToken)
+    {
+        var handler = scopedServices.GetRequiredService<InboxHandler>();
+        return handler.ProcessAsync(cancellationToken);
+    }
+}
+```
+
+Register it with `AddAtyaScopedBackgroundService<TService>`. The original `AddAtyaBackgroundService<TService>` is constrained to `PeriodicBackgroundService` implementations.
 
 ### Bound Consecutive Failures
 
