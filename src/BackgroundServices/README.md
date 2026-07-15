@@ -4,7 +4,7 @@ Small hosted-service execution helpers for production .NET workers.
 
 ## Overview
 
-`Atya.Hosting.BackgroundServices` provides a narrow `BackgroundService` base class for repeatable worker loops. It keeps cancellation, retry delays, consecutive-failure limits, and lifecycle logging consistent without introducing a worker framework or scheduler.
+`Atya.Hosting.BackgroundServices` provides narrow `BackgroundService` base classes for repeatable worker loops. It keeps cancellation, retry delays, consecutive-failure limits, per-iteration dependency injection scopes, and lifecycle logging consistent without introducing a worker framework or scheduler.
 
 ## Installation
 
@@ -50,13 +50,31 @@ internal sealed class InboxWorker(ILogger<InboxWorker> logger)
 
 Derive from `PeriodicBackgroundService` and implement one unit of work in `ExecuteIterationAsync`. The base class calls it repeatedly until the host cancellation token is canceled.
 
+### ScopedPeriodicBackgroundService
+
+Derive from `ScopedPeriodicBackgroundService` when the worker needs scoped services. Each iteration receives an `IServiceProvider` from a fresh scope, and that scope is disposed after the iteration completes. This avoids capturing scoped dependencies in the hosted-service singleton.
+
+```csharp
+internal sealed class ScopedInboxWorker(
+    ILogger<ScopedInboxWorker> logger,
+    IServiceScopeFactory scopeFactory)
+    : ScopedPeriodicBackgroundService(logger, scopeFactory)
+{
+    protected override Task ExecuteIterationAsync(IServiceProvider scopedServices, CancellationToken cancellationToken)
+    {
+        var handler = scopedServices.GetRequiredService<InboxHandler>();
+        return handler.ProcessAsync(cancellationToken);
+    }
+}
+```
+
 ### PeriodicBackgroundServiceOptions
 
 Configure `Interval`, `FailureDelay`, and `MaxConsecutiveFailures`. A successful iteration resets the consecutive-failure count; reaching the failure limit lets the original exception escape to the host.
 
-### AddAtyaBackgroundService
+### Registration Helpers
 
-Use `AddAtyaBackgroundService<TService>` to register an `IHostedService` and optionally configure `PeriodicBackgroundServiceOptions`.
+Use `AddAtyaBackgroundService<TService>` for `PeriodicBackgroundService` implementations. Use `AddAtyaScopedBackgroundService<TService>` for `ScopedPeriodicBackgroundService` implementations. Both helpers can configure `PeriodicBackgroundServiceOptions`.
 
 ## Error Codes
 
