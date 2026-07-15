@@ -52,7 +52,7 @@ Derive from `PeriodicBackgroundService` and implement one unit of work in `Execu
 
 ### ScopedPeriodicBackgroundService
 
-Derive from `ScopedPeriodicBackgroundService` when the worker needs scoped services. Each iteration receives an `IServiceProvider` from a fresh scope, and that scope is disposed after the iteration completes.
+Derive from `ScopedPeriodicBackgroundService` when the worker needs scoped services. Each iteration receives an `IServiceProvider` from a fresh scope, and that scope is disposed after the iteration completes. This avoids capturing scoped dependencies in the hosted-service singleton.
 
 ```csharp
 internal sealed class ScopedInboxWorker(
