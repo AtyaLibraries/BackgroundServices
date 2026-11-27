@@ -16,12 +16,12 @@ public sealed class PeriodicBackgroundServiceTests
         rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagA>>(o => o.Interval = TimeSpan.FromSeconds(1));
         rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagB>>(o => o.Interval = TimeSpan.FromMinutes(10));
 
-        await rig.App.StartAsync();
+        await rig.App.StartAsync(TestContext.Current.CancellationToken);
         await rig.PumpUntilAsync(TimeSpan.FromSeconds(1), () => fast.Count >= 5);
 
         fast.Count.Should().BeGreaterThanOrEqualTo(5);
         slow.Count.Should().Be(1);
-        await rig.App.StopAsync();
+        await rig.App.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -149,10 +149,10 @@ public sealed class PeriodicBackgroundServiceTests
             o.FailureDelay = TimeSpan.FromMinutes(1);
         });
 
-        await rig.App.StartAsync();
+        await rig.App.StartAsync(TestContext.Current.CancellationToken);
         if (phase == "iteration")
         {
-            await started.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
         }
         else
         {
@@ -160,7 +160,7 @@ public sealed class PeriodicBackgroundServiceTests
         }
 
         ScriptedWorker<TagA> worker = rig.Resolve<ScriptedWorker<TagA>>();
-        await rig.App.StopAsync();
+        await rig.App.StopAsync(TestContext.Current.CancellationToken);
 
         worker.Execution!.IsCompletedSuccessfully.Should().BeTrue();
         rig.Log.Entries.Should().NotContain(e => e.EventId.Id == 9102);
@@ -185,7 +185,7 @@ public sealed class PeriodicBackgroundServiceTests
         await worker.StartAsync(CancellationToken.None);
         await rig.WaitUntilAsync(() => rig.Time.TimerCount >= 1);
         rig.Time.Advance(TimeSpan.FromSeconds(1));
-        await Task.Delay(50);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
 
         script.Count.Should().Be(1);
         await rig.PumpUntilAsync(TimeSpan.FromSeconds(10), () => script.Count >= 2);
@@ -220,7 +220,7 @@ public sealed class PeriodicBackgroundServiceTests
             }
         });
 
-        Func<Task> start = () => rig.App.StartAsync();
+        Func<Task> start = () => rig.App.StartAsync(TestContext.Current.CancellationToken);
 
         OptionsValidationException exception = (await start.Should().ThrowAsync<OptionsValidationException>()).Which;
         exception.Message.Should().Contain(option).And.Contain(typeof(ScriptedWorker<TagA>).FullName!);

@@ -20,9 +20,9 @@ public sealed class ScopedPeriodicBackgroundServiceTests
         };
         rig.Services.AddAtyaScopedBackgroundService<ScopedScriptedWorker<TagA>>(o => o.Interval = TimeSpan.FromSeconds(1));
 
-        await rig.App.StartAsync();
+        await rig.App.StartAsync(TestContext.Current.CancellationToken);
         await rig.PumpUntilAsync(TimeSpan.FromSeconds(1), () => script.Count >= 4);
-        await rig.App.StopAsync();
+        await rig.App.StopAsync(TestContext.Current.CancellationToken);
 
         const int iterations = 3;
         string[] observed = events.Take(iterations * 3).ToArray();
@@ -44,11 +44,11 @@ public sealed class ScopedPeriodicBackgroundServiceTests
         };
         rig.Services.AddAtyaScopedBackgroundService<ScopedScriptedWorker<TagA>>(o => o.Interval = TimeSpan.FromMinutes(1));
 
-        await rig.App.StartAsync();
+        await rig.App.StartAsync(TestContext.Current.CancellationToken);
         await rig.WaitUntilAsync(() => rig.Time.TimerCount >= 1);
 
         probe.DisposeCompleted.Should().BeTrue("the delay only starts after DisposeAsync has been awaited");
-        await rig.App.StopAsync();
+        await rig.App.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -69,9 +69,9 @@ public sealed class ScopedPeriodicBackgroundServiceTests
             o.FailureDelay = TimeSpan.FromSeconds(1);
         });
 
-        await rig.App.StartAsync();
+        await rig.App.StartAsync(TestContext.Current.CancellationToken);
         await rig.PumpUntilAsync(TimeSpan.FromSeconds(1), () => script.Count >= 3);
-        await rig.App.StopAsync();
+        await rig.App.StopAsync(TestContext.Current.CancellationToken);
 
         events.Count(e => e == "Constructed").Should().BeGreaterThanOrEqualTo(3);
         events.Count(e => e == "Disposed").Should().Be(events.Count(e => e == "Constructed"));
@@ -90,10 +90,10 @@ public sealed class ScopedPeriodicBackgroundServiceTests
         };
         rig.Services.AddAtyaScopedBackgroundService<ScopedScriptedWorker<TagA>>();
 
-        await rig.App.StartAsync();
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        await rig.App.StartAsync(TestContext.Current.CancellationToken);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
         ScopedScriptedWorker<TagA> worker = rig.Resolve<ScopedScriptedWorker<TagA>>();
-        await rig.App.StopAsync();
+        await rig.App.StopAsync(TestContext.Current.CancellationToken);
 
         worker.Execution!.IsCompletedSuccessfully.Should().BeTrue();
         rig.Log.Entries.Should().NotContain(e => e.Level >= LogLevel.Error);
