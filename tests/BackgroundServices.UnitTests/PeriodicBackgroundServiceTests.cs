@@ -130,16 +130,19 @@ public sealed class PeriodicBackgroundServiceTests
         await using var rig = new Rig();
         Script<TagA> script = rig.AddScript<TagA>();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        script.Body = phase switch
+        if (phase == "iteration")
         {
-            "iteration" => async (_, token) =>
+            script.Body = async (_, token) =>
             {
                 started.TrySetResult();
                 await Task.Delay(Timeout.InfiniteTimeSpan, token);
-            },
-            "backoff" => (_, _) => throw new InvalidOperationException("boom"),
-            _ => (_, _) => Task.CompletedTask,
-        };
+            };
+        }
+        else if (phase == "backoff")
+        {
+            script.Body = (_, _) => throw new InvalidOperationException("boom");
+        }
+
         rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagA>>(o =>
         {
             o.Interval = TimeSpan.FromMinutes(1);
