@@ -167,8 +167,8 @@
       "Atya.Hosting.BackgroundServices": {
         "type": "Project",
         "dependencies": {
-          "Atya.Diagnostics.Logging": "[1.0.2, )",
-          "Atya.Foundation.Guards": "[1.0.2, )",
+          "Atya.Diagnostics.Logging": "[1.0.3, )",
+          "Atya.Foundation.Guards": "[1.1.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.15, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.15, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.15, )",
@@ -177,20 +177,20 @@
       },
       "Atya.Diagnostics.Logging": {
         "type": "CentralTransitive",
-        "requested": "[1.0.2, )",
-        "resolved": "1.0.2",
-        "contentHash": "W8lGYIhVssxzUQ1lr1D5hqzl500d2M8bU64oeViibx4OFIyDQlQtf6PWUde3O17TAlJLCiU1Oa8s4N+MxLEw3Q==",
+        "requested": "[1.0.3, )",
+        "resolved": "1.0.3",
+        "contentHash": "ZFR8UuuL31BXM2eINwmC1aTeMKEZNNfZEastP0JNsCRdzd7fWHRAdSZucsYEobrKFyz7Te3Yu29q5k7xOKrnCw==",
         "dependencies": {
-          "Atya.Foundation.Guards": "1.0.0",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
-          "Microsoft.Extensions.Logging.Abstractions": "10.0.8"
+          "Atya.Foundation.Guards": "1.0.2",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.15"
         }
       },
       "Atya.Foundation.Guards": {
         "type": "CentralTransitive",
-        "requested": "[1.0.2, )",
-        "resolved": "1.0.2",
-        "contentHash": "pK0hllKNECWmAK1XInrp94OSon9NFnbkPL/P37WzUD1riSR/AuaeRo0/VkPP8fw6KuAR3IrqsIHNv2l+soKBhA=="
+        "requested": "[1.1.0, )",
+        "resolved": "1.1.0",
+        "contentHash": "AKdLrehqfdZjwgSzm3TkeOChzL934l28eraXaYyJEN3VNopVWa7/cVRAwFY7bs4UbwmnReYyczCnzM5mrVZQag=="
       },
       "Microsoft.Extensions.DependencyInjection": {
         "type": "CentralTransitive",
