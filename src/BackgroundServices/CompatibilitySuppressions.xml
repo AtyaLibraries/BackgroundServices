@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- https://learn.microsoft.com/dotnet/fundamentals/package-validation/diagnostic-ids -->
+<Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Atya.Hosting.BackgroundServices.PeriodicBackgroundService.#ctor(Microsoft.Extensions.Logging.ILogger,Atya.Hosting.BackgroundServices.PeriodicBackgroundServiceOptions)</Target>
+    <Left>lib/net10.0/Atya.Hosting.BackgroundServices.dll</Left>
+    <Right>lib/net10.0/Atya.Hosting.BackgroundServices.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Atya.Hosting.BackgroundServices.PeriodicBackgroundServiceOptions.get_Default</Target>
+    <Left>lib/net10.0/Atya.Hosting.BackgroundServices.dll</Left>
+    <Right>lib/net10.0/Atya.Hosting.BackgroundServices.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Atya.Hosting.BackgroundServices.PeriodicBackgroundServiceOptions.get_MaxConsecutiveFailures</Target>
+    <Left>lib/net10.0/Atya.Hosting.BackgroundServices.dll</Left>
+    <Right>lib/net10.0/Atya.Hosting.BackgroundServices.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Atya.Hosting.BackgroundServices.ScopedPeriodicBackgroundService.#ctor(Microsoft.Extensions.Logging.ILogger,Microsoft.Extensions.DependencyInjection.IServiceScopeFactory,Atya.Hosting.BackgroundServices.PeriodicBackgroundServiceOptions)</Target>
+    <Left>lib/net10.0/Atya.Hosting.BackgroundServices.dll</Left>
+    <Right>lib/net10.0/Atya.Hosting.BackgroundServices.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+</Suppressions>

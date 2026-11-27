@@ -2,6 +2,7 @@ using Atya.Hosting.BackgroundServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Atya.Hosting.BackgroundServices.Samples.ConsoleApp;
 
@@ -19,11 +20,17 @@ public static class Program
         using IHost host = Host.CreateDefaultBuilder()
             .ConfigureServices(services =>
             {
+                // Each worker has its own named options, so two workers can differ.
                 services.AddAtyaBackgroundService<SampleWorker>(options =>
                 {
                     options.Interval = TimeSpan.FromSeconds(30);
                     options.FailureDelay = TimeSpan.FromSeconds(5);
                     options.MaxConsecutiveFailures = 3;
+                });
+                services.AddAtyaBackgroundService<SlowSampleWorker>(options =>
+                {
+                    options.Interval = TimeSpan.FromMinutes(10);
+                    options.MaxConsecutiveFailures = null; // never stop
                 });
             })
             .Build();
@@ -39,8 +46,8 @@ public static class Program
 
         private readonly ILogger<SampleWorker> _logger;
 
-        public SampleWorker(ILogger<SampleWorker> logger)
-            : base(logger)
+        public SampleWorker(ILogger<SampleWorker> logger, IOptionsMonitor<PeriodicBackgroundServiceOptions> options, TimeProvider timeProvider)
+            : base(logger, options, timeProvider)
         {
             _logger = logger;
         }
@@ -50,5 +57,15 @@ public static class Program
             s_iterationCompleted(_logger, null);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class SlowSampleWorker : PeriodicBackgroundService
+    {
+        public SlowSampleWorker(ILogger<SlowSampleWorker> logger, IOptionsMonitor<PeriodicBackgroundServiceOptions> options, TimeProvider timeProvider)
+            : base(logger, options, timeProvider)
+        {
+        }
+
+        protected override Task ExecuteIterationAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

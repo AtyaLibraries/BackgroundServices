@@ -1,5 +1,7 @@
 using Atya.Foundation.Guards;
 using Atya.Hosting.BackgroundServices;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -13,7 +15,10 @@ public static class BackgroundServiceCollectionExtensions
     /// </summary>
     /// <typeparam name="TService">The hosted service implementation type.</typeparam>
     /// <param name="services">The service collection.</param>
-    /// <param name="configure">An optional callback that configures periodic execution options.</param>
+    /// <param name="configure">
+    /// An optional callback that configures the named options of this worker
+    /// (see <see cref="PeriodicBackgroundServiceOptionNames"/>). The options are validated when the host starts.
+    /// </param>
     /// <returns>The same service collection instance.</returns>
     public static IServiceCollection AddAtyaBackgroundService<TService>(
         this IServiceCollection services,
@@ -21,12 +26,7 @@ public static class BackgroundServiceCollectionExtensions
         where TService : PeriodicBackgroundService
     {
         services = Guard.AgainstNull(services);
-
-        if (configure is not null)
-        {
-            services.Configure(configure);
-        }
-
+        AddWorkerOptions<TService>(services, configure);
         services.AddHostedService<TService>();
         return services;
     }
@@ -36,7 +36,10 @@ public static class BackgroundServiceCollectionExtensions
     /// </summary>
     /// <typeparam name="TService">The scoped periodic hosted service implementation type.</typeparam>
     /// <param name="services">The service collection.</param>
-    /// <param name="configure">An optional callback that configures periodic execution options.</param>
+    /// <param name="configure">
+    /// An optional callback that configures the named options of this worker
+    /// (see <see cref="PeriodicBackgroundServiceOptionNames"/>). The options are validated when the host starts.
+    /// </param>
     /// <returns>The same service collection instance.</returns>
     public static IServiceCollection AddAtyaScopedBackgroundService<TService>(
         this IServiceCollection services,
@@ -44,13 +47,22 @@ public static class BackgroundServiceCollectionExtensions
         where TService : ScopedPeriodicBackgroundService
     {
         services = Guard.AgainstNull(services);
-
-        if (configure is not null)
-        {
-            services.Configure(configure);
-        }
-
+        AddWorkerOptions<TService>(services, configure);
         services.AddHostedService<TService>();
         return services;
+    }
+
+    private static void AddWorkerOptions<TService>(IServiceCollection services, Action<PeriodicBackgroundServiceOptions>? configure)
+    {
+        string name = PeriodicBackgroundServiceOptionNames.For<TService>();
+        OptionsBuilder<PeriodicBackgroundServiceOptions> builder = services.AddOptions<PeriodicBackgroundServiceOptions>(name);
+        if (configure is not null)
+        {
+            builder.Configure(configure);
+        }
+
+        services.AddSingleton<IValidateOptions<PeriodicBackgroundServiceOptions>>(new PeriodicBackgroundServiceOptionsValidator(name));
+        builder.ValidateOnStart();
+        services.TryAddSingleton(TimeProvider.System);
     }
 }

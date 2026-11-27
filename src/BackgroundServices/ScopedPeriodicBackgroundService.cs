@@ -1,34 +1,42 @@
-using Atya.Diagnostics.Logging.Extensions;
 using Atya.Foundation.Guards;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Atya.Hosting.BackgroundServices;
 
 /// <summary>
 /// Provides a <see cref="BackgroundService"/> base class that creates a fresh dependency injection scope for each iteration.
+/// The scope is disposed asynchronously before the delay that follows the iteration starts.
 /// </summary>
 public abstract class ScopedPeriodicBackgroundService : BackgroundService
 {
     private readonly ILogger _logger;
-    private readonly PeriodicBackgroundServiceOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly LoopSettings _settings;
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ScopedPeriodicBackgroundService"/> class.
     /// </summary>
     /// <param name="logger">The logger used to write lifecycle and failure events.</param>
     /// <param name="scopeFactory">The factory used to create one dependency injection scope per iteration.</param>
-    /// <param name="options">The execution options for the service.</param>
+    /// <param name="options">
+    /// The options monitor. The named instance for this worker's type (see
+    /// <see cref="PeriodicBackgroundServiceOptionNames"/>) is read once and copied.
+    /// </param>
+    /// <param name="timeProvider">The time provider used for delays.</param>
     protected ScopedPeriodicBackgroundService(
         ILogger logger,
         IServiceScopeFactory scopeFactory,
-        PeriodicBackgroundServiceOptions? options = null)
+        IOptionsMonitor<PeriodicBackgroundServiceOptions> options,
+        TimeProvider timeProvider)
     {
         _logger = Guard.AgainstNull(logger);
         _scopeFactory = Guard.AgainstNull(scopeFactory);
-        _options = (options ?? PeriodicBackgroundServiceOptions.Default).Validate();
+        _timeProvider = Guard.AgainstNull(timeProvider);
+        _settings = LoopSettings.Snapshot(Guard.AgainstNull(options), GetType());
     }
 
     /// <summary>
@@ -37,19 +45,15 @@ public abstract class ScopedPeriodicBackgroundService : BackgroundService
     protected virtual string OperationName => GetType().Name;
 
     /// <inheritdoc />
-    protected sealed override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _logger.LogOperationStarted(OperationName, GetType().FullName);
-
-        try
-        {
-            await RunLoopAsync(stoppingToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _logger.LogOperationCompleted(OperationName, GetType().FullName);
-        }
-    }
+    protected sealed override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        PeriodicLoop.RunAsync(
+            _settings,
+            _timeProvider,
+            _logger,
+            OperationName,
+            PeriodicBackgroundServiceOptionNames.For(GetType()),
+            RunScopedIterationAsync,
+            stoppingToken);
 
     /// <summary>
     /// Executes one unit of background work using services resolved from the current iteration scope.
@@ -59,40 +63,12 @@ public abstract class ScopedPeriodicBackgroundService : BackgroundService
     /// <returns>A task that represents the asynchronous operation.</returns>
     protected abstract Task ExecuteIterationAsync(IServiceProvider scopedServices, CancellationToken cancellationToken);
 
-    private static Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken)
+    private async Task RunScopedIterationAsync(CancellationToken cancellationToken)
     {
-        return delay == TimeSpan.Zero ? Task.CompletedTask : Task.Delay(delay, cancellationToken);
-    }
-
-    private async Task RunLoopAsync(CancellationToken stoppingToken)
-    {
-        int consecutiveFailures = 0;
-
-        while (!stoppingToken.IsCancellationRequested)
+        AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+        await using (scope.ConfigureAwait(false))
         {
-            try
-            {
-                using IServiceScope scope = _scopeFactory.CreateScope();
-                await ExecuteIterationAsync(scope.ServiceProvider, stoppingToken).ConfigureAwait(false);
-                consecutiveFailures = 0;
-                await DelayAsync(_options.Interval, stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception exception) when (consecutiveFailures + 1 < _options.MaxConsecutiveFailures)
-            {
-                consecutiveFailures++;
-                _logger.LogOperationFailed(exception, OperationName, GetType().FullName);
-                _logger.LogRetryAttempt(OperationName, consecutiveFailures, _options.MaxConsecutiveFailures);
-                await DelayAsync(_options.FailureDelay, stoppingToken).ConfigureAwait(false);
-            }
-            catch (Exception exception)
-            {
-                _logger.LogOperationFailed(exception, OperationName, GetType().FullName);
-                throw;
-            }
+            await ExecuteIterationAsync(scope.ServiceProvider, cancellationToken).ConfigureAwait(false);
         }
     }
 }
