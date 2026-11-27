@@ -1,5 +1,7 @@
 using BenchmarkDotNet.Attributes;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Atya.Hosting.BackgroundServices.Benchmarks;
 
@@ -44,15 +46,21 @@ public class PeriodicBackgroundServiceBenchmarks : IDisposable
         public CancellationTokenSource? Cancellation { get; set; }
 
         public BenchmarkService()
-            : base(
-                NullLogger.Instance,
-                new PeriodicBackgroundServiceOptions
-                {
-                    Interval = TimeSpan.Zero,
-                    FailureDelay = TimeSpan.Zero,
-                    MaxConsecutiveFailures = 1,
-                })
+            : base(NullLogger.Instance, CreateMonitor(), TimeProvider.System)
         {
+        }
+
+        private static IOptionsMonitor<PeriodicBackgroundServiceOptions> CreateMonitor()
+        {
+            var services = new ServiceCollection();
+            services.AddOptions<PeriodicBackgroundServiceOptions>(PeriodicBackgroundServiceOptionNames.For<BenchmarkService>())
+                .Configure(options =>
+                {
+                    options.Interval = TimeSpan.FromHours(1);
+                    options.FailureDelay = TimeSpan.Zero;
+                    options.MaxConsecutiveFailures = 1;
+                });
+            return services.BuildServiceProvider().GetRequiredService<IOptionsMonitor<PeriodicBackgroundServiceOptions>>();
         }
 
         public Task RunAsync(CancellationToken cancellationToken)

@@ -1,120 +1,246 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Atya.Hosting.BackgroundServices.UnitTests;
 
 public sealed class PeriodicBackgroundServiceTests
 {
     [Fact]
-    public async Task RunAsync_When_Iteration_Succeeds_Repeats_Until_Canceled()
+    public async Task Two_Workers_Observe_Their_Own_Options()
     {
-        using var cancellation = new CancellationTokenSource();
-        int serviceIterations = 0;
-        var service = new TestPeriodicService(
-            new PeriodicBackgroundServiceOptions
-            {
-                Interval = TimeSpan.Zero,
-                FailureDelay = TimeSpan.Zero,
-                MaxConsecutiveFailures = 2,
-            },
-            async token =>
-            {
-                if (Interlocked.Increment(ref serviceIterations) == 2)
-                {
-                    await cancellation.CancelAsync().ConfigureAwait(false);
-                }
+        await using var rig = new Rig();
+        Script<TagA> fast = rig.AddScript<TagA>();
+        Script<TagB> slow = rig.AddScript<TagB>();
+        rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagA>>(o => o.Interval = TimeSpan.FromSeconds(1));
+        rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagB>>(o => o.Interval = TimeSpan.FromMinutes(10));
 
-                token.ThrowIfCancellationRequested();
-            });
-        await service.RunAsync(cancellation.Token);
+        await rig.App.StartAsync(TestContext.Current.CancellationToken);
+        await rig.PumpUntilAsync(TimeSpan.FromSeconds(1), () => fast.Count >= 5);
 
-        serviceIterations.Should().Be(2);
+        fast.Count.Should().BeGreaterThanOrEqualTo(5);
+        slow.Count.Should().Be(1);
+        await rig.App.StopAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
-    public async Task RunAsync_When_Iteration_Fails_Below_Limit_Retries()
+    public async Task Two_Workers_Observe_Their_Own_Failure_Limit()
     {
-        using var cancellation = new CancellationTokenSource();
-        int attempts = 0;
-        var service = new TestPeriodicService(
-            new PeriodicBackgroundServiceOptions
-            {
-                Interval = TimeSpan.Zero,
-                FailureDelay = TimeSpan.Zero,
-                MaxConsecutiveFailures = 3,
-            },
-            async token =>
-            {
-                attempts++;
-                if (attempts == 1)
-                {
-                    throw new InvalidOperationException("retry");
-                }
+        await using var rig = new Rig();
+        Script<TagA> strict = rig.AddScript<TagA>();
+        Script<TagB> lenient = rig.AddScript<TagB>();
+        strict.Body = (_, _) => throw new InvalidOperationException("strict");
+        lenient.Body = (_, _) => throw new InvalidOperationException("lenient");
+        rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagA>>(o =>
+        {
+            o.FailureDelay = TimeSpan.FromSeconds(1);
+            o.MaxConsecutiveFailures = 1;
+        });
+        rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagB>>(o =>
+        {
+            o.FailureDelay = TimeSpan.FromSeconds(1);
+            o.MaxConsecutiveFailures = 4;
+        });
+        ScriptedWorker<TagA> a = ActivatorUtilities.CreateInstance<ScriptedWorker<TagA>>(rig.App.Services);
+        ScriptedWorker<TagB> b = ActivatorUtilities.CreateInstance<ScriptedWorker<TagB>>(rig.App.Services);
 
-                await cancellation.CancelAsync().ConfigureAwait(false);
-                token.ThrowIfCancellationRequested();
-            });
+        await a.StartAsync(CancellationToken.None);
+        await b.StartAsync(CancellationToken.None);
+        await rig.PumpUntilAsync(TimeSpan.FromSeconds(1), () => a.Execution!.IsCompleted && b.Execution!.IsCompleted);
 
-        await service.RunAsync(cancellation.Token);
+        strict.Count.Should().Be(2);
+        lenient.Count.Should().Be(5);
+    }
 
-        attempts.Should().Be(2);
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task Exactly_N_Consecutive_Failures_Are_Tolerated_And_The_Next_Is_Rethrown(int limit)
+    {
+        await using var rig = new Rig();
+        Script<TagA> script = rig.AddScript<TagA>();
+        var failure = new InvalidOperationException("always");
+        script.Body = (_, _) => throw failure;
+        rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagA>>(o =>
+        {
+            o.FailureDelay = TimeSpan.FromSeconds(1);
+            o.MaxConsecutiveFailures = limit;
+        });
+        ScriptedWorker<TagA> worker = ActivatorUtilities.CreateInstance<ScriptedWorker<TagA>>(rig.App.Services);
+
+        await worker.StartAsync(CancellationToken.None);
+        await rig.PumpUntilAsync(TimeSpan.FromSeconds(1), () => worker.Execution!.IsCompleted);
+
+        script.Count.Should().Be(limit + 1);
+        worker.Execution!.IsFaulted.Should().BeTrue();
+        worker.Execution.Exception!.InnerException.Should().BeSameAs(failure);
+        rig.Log.Entries.Should().Contain(e => e.EventId.Id == 9102);
     }
 
     [Fact]
-    public async Task RunAsync_When_ConsecutiveFailures_Reach_Limit_Rethrows()
+    public async Task Null_Failure_Limit_Never_Stops()
     {
-        var service = new TestPeriodicService(
-            new PeriodicBackgroundServiceOptions
-            {
-                Interval = TimeSpan.Zero,
-                FailureDelay = TimeSpan.Zero,
-                MaxConsecutiveFailures = 2,
-            },
-            _ => throw new InvalidOperationException("fatal"));
+        await using var rig = new Rig();
+        Script<TagA> script = rig.AddScript<TagA>();
+        script.Body = (_, _) => throw new InvalidOperationException("always");
+        rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagA>>(o =>
+        {
+            o.FailureDelay = TimeSpan.FromSeconds(1);
+            o.MaxConsecutiveFailures = null;
+        });
+        ScriptedWorker<TagA> worker = ActivatorUtilities.CreateInstance<ScriptedWorker<TagA>>(rig.App.Services);
 
-        Func<Task> action = () => service.RunAsync(CancellationToken.None);
+        await worker.StartAsync(CancellationToken.None);
+        await rig.PumpUntilAsync(TimeSpan.FromSeconds(1), () => script.Count >= 25);
 
-        await action.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("fatal");
+        worker.Execution!.IsCompleted.Should().BeFalse();
+        await worker.StopAsync(CancellationToken.None);
+        worker.Execution.IsCompletedSuccessfully.Should().BeTrue();
     }
 
     [Fact]
-    public void Constructor_With_Null_Logger_Throws()
+    public async Task A_Success_Resets_The_Consecutive_Failure_Count()
     {
-        Action action = () => _ = new TestPeriodicService(null!, PeriodicBackgroundServiceOptions.Default, _ => Task.CompletedTask);
+        await using var rig = new Rig();
+        Script<TagA> script = rig.AddScript<TagA>();
+        script.Body = (n, _) => n % 3 == 0 ? Task.CompletedTask : throw new InvalidOperationException("flaky");
+        rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagA>>(o =>
+        {
+            o.Interval = TimeSpan.FromSeconds(1);
+            o.FailureDelay = TimeSpan.FromSeconds(1);
+            o.MaxConsecutiveFailures = 2;
+        });
+        ScriptedWorker<TagA> worker = ActivatorUtilities.CreateInstance<ScriptedWorker<TagA>>(rig.App.Services);
 
-        action.Should().Throw<ArgumentNullException>()
-            .WithParameterName("logger");
+        await worker.StartAsync(CancellationToken.None);
+        await rig.PumpUntilAsync(TimeSpan.FromSeconds(1), () => script.Count >= 12);
+
+        worker.Execution!.IsCompleted.Should().BeFalse();
+        await worker.StopAsync(CancellationToken.None);
     }
 
-    private sealed class TestPeriodicService : PeriodicBackgroundService
+    [Theory]
+    [InlineData("iteration")]
+    [InlineData("interval")]
+    [InlineData("backoff")]
+    public async Task Shutdown_Is_Clean_At_Every_Phase(string phase)
     {
-        private readonly Func<CancellationToken, Task> _execute;
-
-        public TestPeriodicService(
-            PeriodicBackgroundServiceOptions options,
-            Func<CancellationToken, Task> execute)
-            : this(NullLogger.Instance, options, execute)
+        await using var rig = new Rig();
+        Script<TagA> script = rig.AddScript<TagA>();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (phase == "iteration")
         {
+            script.Body = async (_, token) =>
+            {
+                started.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            };
+        }
+        else if (phase == "backoff")
+        {
+            script.Body = (_, _) => throw new InvalidOperationException("boom");
         }
 
-        public TestPeriodicService(
-            ILogger logger,
-            PeriodicBackgroundServiceOptions options,
-            Func<CancellationToken, Task> execute)
-            : base(logger, options)
+        rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagA>>(o =>
         {
-            _execute = execute;
+            o.Interval = TimeSpan.FromMinutes(1);
+            o.FailureDelay = TimeSpan.FromMinutes(1);
+        });
+
+        await rig.App.StartAsync(TestContext.Current.CancellationToken);
+        if (phase == "iteration")
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+        }
+        else
+        {
+            await rig.WaitUntilAsync(() => rig.Time.TimerCount >= 1);
         }
 
-        public Task RunAsync(CancellationToken cancellationToken)
-        {
-            return ExecuteAsync(cancellationToken);
-        }
+        ScriptedWorker<TagA> worker = rig.Resolve<ScriptedWorker<TagA>>();
+        await rig.App.StopAsync(TestContext.Current.CancellationToken);
 
-        protected override Task ExecuteIterationAsync(CancellationToken cancellationToken)
+        worker.Execution!.IsCompletedSuccessfully.Should().BeTrue();
+        rig.Log.Entries.Should().NotContain(e => e.EventId.Id == 9102);
+        rig.Log.Entries.Count(e => e.Level >= LogLevel.Error).Should().Be(phase == "backoff" ? 1 : 0);
+        rig.Log.Entries.Should().Contain(e => e.EventId.Id == 9101);
+    }
+
+    [Fact]
+    public async Task Mutating_The_Options_After_Construction_Does_Not_Affect_A_Running_Worker()
+    {
+        await using var rig = new Rig();
+        Script<TagA> script = rig.AddScript<TagA>();
+        rig.Services.AddOptions<PeriodicBackgroundServiceOptions>(PeriodicBackgroundServiceOptionNames.For<ScriptedWorker<TagA>>())
+            .Configure(o => o.Interval = TimeSpan.FromSeconds(10));
+        ScriptedWorker<TagA> worker = ActivatorUtilities.CreateInstance<ScriptedWorker<TagA>>(rig.App.Services);
+        PeriodicBackgroundServiceOptions shared = rig.App.Services
+            .GetRequiredService<IOptionsMonitor<PeriodicBackgroundServiceOptions>>()
+            .Get(PeriodicBackgroundServiceOptionNames.For<ScriptedWorker<TagA>>());
+
+        shared.Interval = TimeSpan.Zero;
+        shared.MaxConsecutiveFailures = 1;
+        await worker.StartAsync(CancellationToken.None);
+        await rig.WaitUntilAsync(() => rig.Time.TimerCount >= 1);
+        rig.Time.Advance(TimeSpan.FromSeconds(1));
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+
+        script.Count.Should().Be(1);
+        await rig.PumpUntilAsync(TimeSpan.FromSeconds(10), () => script.Count >= 2);
+        await worker.StopAsync(CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData("zero-interval", "Interval")]
+    [InlineData("negative-interval", "Interval")]
+    [InlineData("negative-delay", "FailureDelay")]
+    [InlineData("zero-failures", "MaxConsecutiveFailures")]
+    public async Task Invalid_Options_Fail_Host_Start_Before_Any_Iteration(string scenario, string option)
+    {
+        await using var rig = new Rig();
+        Script<TagA> script = rig.AddScript<TagA>();
+        rig.Services.AddAtyaBackgroundService<ScriptedWorker<TagA>>(o =>
         {
-            return _execute(cancellationToken);
-        }
+            switch (scenario)
+            {
+                case "zero-interval":
+                    o.Interval = TimeSpan.Zero;
+                    break;
+                case "negative-interval":
+                    o.Interval = TimeSpan.FromSeconds(-1);
+                    break;
+                case "negative-delay":
+                    o.FailureDelay = TimeSpan.FromSeconds(-1);
+                    break;
+                default:
+                    o.MaxConsecutiveFailures = 0;
+                    break;
+            }
+        });
+
+        Func<Task> start = () => rig.App.StartAsync(TestContext.Current.CancellationToken);
+
+        OptionsValidationException exception = (await start.Should().ThrowAsync<OptionsValidationException>()).Which;
+        exception.Message.Should().Contain(option).And.Contain(typeof(ScriptedWorker<TagA>).FullName!);
+        script.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public void Constructor_With_Null_Arguments_Throws()
+    {
+        var rig = new Rig();
+        rig.AddScript<TagA>();
+        IOptionsMonitor<PeriodicBackgroundServiceOptions> monitor = rig.App.Services.GetRequiredService<IOptionsMonitor<PeriodicBackgroundServiceOptions>>();
+        var script = new Script<TagA>();
+
+        Action noLogger = () => _ = new ScriptedWorker<TagA>(null!, monitor, rig.Time, script);
+        Action noOptions = () => _ = new ScriptedWorker<TagA>(Microsoft.Extensions.Logging.Abstractions.NullLogger<ScriptedWorker<TagA>>.Instance, null!, rig.Time, script);
+        Action noTime = () => _ = new ScriptedWorker<TagA>(Microsoft.Extensions.Logging.Abstractions.NullLogger<ScriptedWorker<TagA>>.Instance, monitor, null!, script);
+
+        noLogger.Should().Throw<ArgumentNullException>();
+        noOptions.Should().Throw<ArgumentNullException>();
+        noTime.Should().Throw<ArgumentNullException>();
     }
 }

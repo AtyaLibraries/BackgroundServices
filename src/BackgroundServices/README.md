@@ -19,6 +19,7 @@ using Atya.Hosting.BackgroundServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using IHost host = Host.CreateDefaultBuilder(args)
     .ConfigureServices(services =>
@@ -27,15 +28,18 @@ using IHost host = Host.CreateDefaultBuilder(args)
         {
             options.Interval = TimeSpan.FromSeconds(30);
             options.FailureDelay = TimeSpan.FromSeconds(5);
-            options.MaxConsecutiveFailures = 3;
+            options.MaxConsecutiveFailures = 3; // or null to never stop
         });
     })
     .Build();
 
 await host.RunAsync();
 
-internal sealed class InboxWorker(ILogger<InboxWorker> logger)
-    : PeriodicBackgroundService(logger)
+internal sealed class InboxWorker(
+    ILogger<InboxWorker> logger,
+    IOptionsMonitor<PeriodicBackgroundServiceOptions> options,
+    TimeProvider timeProvider)
+    : PeriodicBackgroundService(logger, options, timeProvider)
 {
     protected override Task ExecuteIterationAsync(CancellationToken cancellationToken)
     {
@@ -57,8 +61,10 @@ Derive from `ScopedPeriodicBackgroundService` when the worker needs scoped servi
 ```csharp
 internal sealed class ScopedInboxWorker(
     ILogger<ScopedInboxWorker> logger,
-    IServiceScopeFactory scopeFactory)
-    : ScopedPeriodicBackgroundService(logger, scopeFactory)
+    IServiceScopeFactory scopeFactory,
+    IOptionsMonitor<PeriodicBackgroundServiceOptions> options,
+    TimeProvider timeProvider)
+    : ScopedPeriodicBackgroundService(logger, scopeFactory, options, timeProvider)
 {
     protected override Task ExecuteIterationAsync(IServiceProvider scopedServices, CancellationToken cancellationToken)
     {
@@ -75,6 +81,16 @@ Configure `Interval`, `FailureDelay`, and `MaxConsecutiveFailures`. A successful
 ### Registration Helpers
 
 Use `AddAtyaBackgroundService<TService>` for `PeriodicBackgroundService` implementations. Use `AddAtyaScopedBackgroundService<TService>` for `ScopedPeriodicBackgroundService` implementations. Both helpers can configure `PeriodicBackgroundServiceOptions`.
+
+## Migrating from 1.x to 2.0
+
+- **Constructors.** Derived workers now pass `IOptionsMonitor<PeriodicBackgroundServiceOptions>` and a `TimeProvider` to the base class (see the examples above). `TimeProvider` is required; the `AddAtya...BackgroundService` helpers register `TimeProvider.System` if none is registered.
+- **Options are per worker.** Each worker reads the options named `PeriodicBackgroundServiceOptionNames.For<TWorker>()` (the worker's full type name) once, at construction, and copies them. The `configure` callback of `AddAtyaBackgroundService` now takes effect (in 1.x it was ignored) and two workers can have different settings. Later changes to the options object or a configuration reload do not affect a running worker. To bind configuration use `services.AddOptions<PeriodicBackgroundServiceOptions>(PeriodicBackgroundServiceOptionNames.For<MyWorker>()).BindConfiguration("Workers:MyWorker")`. Shared defaults: `services.ConfigureAll<PeriodicBackgroundServiceOptions>(...)`; the unnamed `Configure<>` does not reach named instances.
+- **`PeriodicBackgroundServiceOptions.Default` is removed.** It was a shared mutable instance.
+- **Validation at startup.** `Interval` must be greater than zero, `FailureDelay` must not be negative, `MaxConsecutiveFailures` must be `null` or at least 1. Invalid values fail host start and name the worker and the option.
+- **`MaxConsecutiveFailures = N` tolerates exactly N failures** (fix: 1.x tolerated N-1, so `1` tolerated none). The default of 3 now tolerates three. `null` (type is now `int?`) tolerates failures forever.
+- **Scoped workers** dispose the iteration scope asynchronously, before the interval delay starts, so scoped services (DbContext, connections) are no longer held while idle. Do not keep services from the iteration scope beyond the iteration.
+- **Clean shutdown.** Stopping the host during the failure backoff no longer faults `ExecuteAsync`.
 
 ## Error Codes
 
